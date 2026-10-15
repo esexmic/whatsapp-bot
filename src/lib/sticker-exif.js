@@ -6,7 +6,7 @@ function cleanText(value) {
   return String(value ?? '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 100)
 }
 
-export function createStickerExif({ packname = 'bot', author = '' } = {}) {
+export function createStickerExif({ packname = 'bot', author = 'xyb' } = {}) {
   const payload = Buffer.from(JSON.stringify({
     'sticker-pack-id': 'com.whatsapp.sticker',
     'sticker-pack-name': cleanText(packname),

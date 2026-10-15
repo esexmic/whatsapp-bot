@@ -30,7 +30,7 @@ const DEFAULTS = {
     botName: 'CKV BOT',
     menuStyle: 'default',
     stickerPack: 'CKV',
-    stickerAuthor: 'Bot',
+    stickerAuthor: 'xyb',
     mode: 'public',
     welcome: {},
     goodbye: {},

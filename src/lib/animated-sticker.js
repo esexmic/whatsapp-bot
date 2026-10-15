@@ -9,7 +9,7 @@ import { addStickerMetadata } from './sticker-exif.js'
 
 const execFileAsync = promisify(execFile)
 
-export async function makeAnimatedSticker(input, { packname = 'bot', author = '', maxDuration = 10 } = {}) {
+export async function makeAnimatedSticker(input, { packname = 'bot', author = 'xyb', maxDuration = 10 } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'animated-sticker-'))
   const inputPath = join(dir, 'input.mp4')
   const outputPath = join(dir, 'output.webp')

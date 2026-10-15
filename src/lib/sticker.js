@@ -47,7 +47,7 @@ export async function toBuffer(input) {
  * @param {Buffer|string} input imagen original
  * @param {{packname?:string, author?:string, quality?:number}} opts
  */
-export async function makeSticker(input, { packname = 'bot', author = 'bot', quality = 90 } = {}) {
+export async function makeSticker(input, { packname = 'bot', author = 'xyb', quality = 90 } = {}) {
   const buffer = await toBuffer(input)
 
   const image = sharp(buffer, { failOn: 'none', animated: false })
