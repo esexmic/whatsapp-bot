@@ -5,7 +5,7 @@ import { Readable } from 'stream'
 import { encryptedStream } from '@whiskeysockets/baileys'
 import webpmux from 'node-webpmux'
 import { makeSticker, makeStickerWithText, toBuffer } from '../src/lib/sticker.js'
-import { addStickerMetadata } from '../src/lib/animated-sticker.js'
+import { addStickerMetadata } from '../src/lib/sticker-exif.js'
 import { downloadMediaBuffer, findMedia } from '../src/lib/media.js'
 import { parseStickerOptions } from '../src/lib/sticker-options.js'
 import { cacheContact, contactName } from '../src/lib/contacts.js'
@@ -27,6 +27,15 @@ async function samplePng(w = 800, h = 600) {
   return sharp({ create: { width: w, height: h, channels: 3, background: { r: 10, g: 120, b: 200 } } })
     .png()
     .toBuffer()
+}
+
+function readStickerMetadata(exif) {
+  assert.equal(exif.toString('ascii', 0, 2), 'II')
+  assert.equal(exif.readUInt16LE(10), 0x5741)
+  assert.equal(exif.readUInt16LE(12), 7)
+  const length = exif.readUInt32LE(14)
+  const offset = exif.readUInt32LE(18)
+  return JSON.parse(exif.subarray(offset, offset + length).toString('utf8'))
 }
 
 console.log('\n== sticker (reemplazo de wa-sticker-formatter) ==')
@@ -55,11 +64,11 @@ await t('acepta un sticker WebP de entrada (caso .wm)', async () => {
 
 await t('incluye EXIF con pack y autor', async () => {
   const s = await makeSticker(await samplePng(), { packname: 'MiPack', author: 'MiAutor' })
-  const m = await sharp(s).metadata()
-  assert.ok(m.exif && m.exif.length > 0, 'sin EXIF: WhatsApp no mostraría el pack')
-  const exifText = m.exif.toString('latin1')
-  assert.ok(exifText.includes('MiPack'), 'el pack personalizado no quedó guardado')
-  assert.ok(exifText.includes('MiAutor'), 'el autor personalizado no quedó guardado')
+  const image = new webpmux.Image()
+  await image.load(s)
+  const metadata = readStickerMetadata(image.exif)
+  assert.equal(metadata['sticker-pack-name'], 'MiPack')
+  assert.equal(metadata['sticker-pack-publisher'], 'MiAutor')
 })
 
 await t('añade metadata sin perder la animación WebP', async () => {
@@ -78,10 +87,9 @@ await t('añade metadata sin perder la animación WebP', async () => {
 
   assert.ok(result.hasAnim, 'se perdió la animación')
   assert.equal(result.frames.length, 2)
-  assert.ok(result.exif, 'se perdió el EXIF')
-  const exifText = result.exif.toString('latin1')
-  assert.ok(exifText.includes('Animado'), 'el pack animado no quedó guardado')
-  assert.ok(exifText.includes('Bot'), 'el autor animado no quedó guardado')
+  const metadata = readStickerMetadata(result.exif)
+  assert.equal(metadata['sticker-pack-name'], 'Animado')
+  assert.equal(metadata['sticker-pack-publisher'], 'Bot')
 })
 
 await t('acepta base64 y URL-like strings', async () => {

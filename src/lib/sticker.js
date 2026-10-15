@@ -1,4 +1,5 @@
 import sharp from 'sharp'
+import { addStickerMetadata } from './sticker-exif.js'
 
 /**
  * Generador de stickers de WhatsApp.
@@ -41,12 +42,6 @@ export async function toBuffer(input) {
   throw new Error('Entrada de imagen no reconocida')
 }
 
-/** Normaliza EXIF: sharp exige strings con prefijo de tipo ASCII. */
-function exifString(value) {
-  const s = String(value ?? '').replace(/[\r\n]+/g, ' ').trim().slice(0, 64)
-  return s
-}
-
 /**
  * Convierte una imagen en sticker WebP de WhatsApp (512x512).
  * @param {Buffer|string} input imagen original
@@ -67,25 +62,8 @@ export async function makeSticker(input, { packname = 'bot', author = 'bot', qua
       effort: 4,
     })
 
-  try {
-    return await image
-      .withExif({
-        IFD0: {
-          Copyright: exifString(author),
-          Artist: exifString(author),
-          ImageDescription: exifString(packname),
-          Software: 'CKV BOT',
-        },
-      })
-      .toBuffer()
-  } catch {
-    // Si la imagen ya trae EXIF raro que sharp no puede procesar, va sin metadata.
-    return await sharp(buffer, { failOn: 'none' })
-      .rotate()
-      .resize(MAX, MAX, { fit: 'cover', position: 'centre' })
-      .webp({ quality })
-      .toBuffer()
-  }
+  const webpBuffer = await image.toBuffer()
+  return addStickerMetadata(webpBuffer, { packname, author })
 }
 
 /** Sticker con texto encima (para .globo y similares). */
