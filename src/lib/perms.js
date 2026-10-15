@@ -188,28 +188,61 @@ export function isBanned(sender, db) {
   return db.data.banned.some(bannedId => ids.includes(clean(bannedId)))
 }
 
-export function getSenderId(m = {}) {
-  const chatJid = m?.key?.remoteJid || m?.chat || ""
+function isLidJid(value) {
+  return String(value || '').toLowerCase().endsWith('@lid')
+}
+
+/**
+ * Todos los ids con los que puede venir la misma persona, de mejor a peor.
+ *
+ * Cada mensaje trae DOS identificadores: el que esta en uso
+ * (remoteJid / participant) y el alterno (remoteJidAlt / participantAlt).
+ * Baileys los separa en decode-wa-message segun el `addressing_mode` del
+ * stanza: si el principal es un @lid, el alterno trae el numero real, y al
+ * reves. Por eso se eligen primero los que NO son @lid: ese es el numero que
+ * esta en la lista de owners y el que espera el resto de las llamadas.
+ *
+ * Antes se tomaba solo remoteJid/participant, asi que un owner guardado por
+ * numero fallaba en cuanto WhatsApp le mandaba la conversacion por @lid.
+ */
+export function getSenderIds(m = {}) {
+  const chatJid = m?.key?.remoteJid || m?.chat || ''
   const isGroup = isGroupJid(chatJid)
 
-  const candidates = [
-    m?.sender,
-    m?.key?.participant,
-    m?.participant,
+  const principal = isGroup
+    ? [m?.key?.participant, m?.sender, m?.participant]
+    : [m?.key?.remoteJid, m?.sender, m?.chat]
+
+  const alterno = isGroup ? m?.key?.participantAlt : m?.key?.remoteJidAlt
+
+  const todos = [
+    ...principal,
+    alterno,
     m?.author,
-    m?.message?.extendedTextMessage?.contextInfo?.participant,
-    isGroup ? "" : m?.key?.remoteJid,
-    isGroup ? "" : m?.chat,
-    m?.key?.fromMe ? m?.key?.remoteJid : ""
+    m?.key?.fromMe ? m?.key?.remoteJid : '',
   ].filter(Boolean)
 
-  for (const value of candidates) {
-    const cleaned = clean(value)
-    if (cleaned) return cleaned
+  const seen = new Set()
+  const ids = []
+  const push = (value) => {
+    const c = clean(value)
+    if (c && !seen.has(c)) {
+      seen.add(c)
+      ids.push(c)
+    }
   }
 
-  const scanned = collectCandidateIds(m)
-  return scanned.find(Boolean) || ""
+  // Numero real primero, despues el @lid como ultimo recurso.
+  todos.filter((v) => !isLidJid(v)).forEach(push)
+  todos.filter((v) => isLidJid(v)).forEach(push)
+
+  if (ids.length) return ids
+
+  return collectCandidateIds(m).filter(Boolean)
+}
+
+export function getSenderId(m = {}) {
+  return getSenderIds(m)[0] || ''
 }
 
 // 🛡️ DB INIT

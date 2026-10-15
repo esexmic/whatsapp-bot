@@ -4,7 +4,7 @@
  */
 import assert from 'assert'
 import { isOwner, isAdmin, isBanned, registerLidMapping } from '../src/lib/perms.js'
-import { requireStaff, requireGroupStaff } from '../src/lib/guard.js'
+import { requireStaff, requireGroupStaff, senderOf } from '../src/lib/guard.js'
 
 const OWNER = '16787062887@s.whatsapp.net'
 const STRANGER = '529999999999@s.whatsapp.net'
@@ -157,6 +157,33 @@ await t('un baneado sigue baneado aunque su mensaje llegue por su @lid', () => {
     'el baneado se escapo por su @lid: seguridad rota'
   )
   assert.equal(isBanned('7776665554@lid', banned), false, 'LID sin mapear no debe banear de mas')
+})
+
+console.log('\n== remoteJidAlt / participantAlt: el numero viene en el mensaje ==')
+await t('en privado, remoteJid @lid + remoteJidAlt numero -> owner', async () => {
+  const c = makeSocket()
+  const msg = { key: { remoteJid: OWNER_LID, remoteJidAlt: OWNER } }
+  assert.equal(senderOf(msg), '16787062887', 'no se tomo el numero real del campo Alt')
+  assert.ok(await requireStaff(c, msg, db))
+})
+
+await t('en grupo, participant @lid + participantAlt numero -> owner', async () => {
+  const c = makeSocket()
+  const msg = { key: { remoteJid: GROUP, participant: OWNER_LID, participantAlt: OWNER } }
+  assert.equal(senderOf(msg), '16787062887')
+  assert.ok(await requireStaff(c, msg, db))
+})
+
+await t('sin campos Alt se comporta como antes (numero directo)', () => {
+  assert.equal(senderOf({ key: { remoteJid: OWNER } }), '16787062887')
+  assert.equal(senderOf({ key: { remoteJid: GROUP, participant: OWNER } }), '16787062887')
+})
+
+await t('el campo Alt no abre la puerta a cualquiera', async () => {
+  const c = makeSocket()
+  const falso = { key: { remoteJid: '1111111111@lid', remoteJidAlt: '2222222222@s.whatsapp.net' } }
+  assert.equal(isOwner(senderOf(falso)), false)
+  assert.equal(await requireStaff(c, falso, db), false)
 })
 
 console.log(`\n${pass} pasaron, ${fail} fallaron\n`)

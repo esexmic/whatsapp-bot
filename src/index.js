@@ -1,4 +1,4 @@
-﻿import makeWASocket, {
+import makeWASocket, {
   useMultiFileAuthState,
   DisconnectReason,
 } from '@whiskeysockets/baileys'
@@ -15,7 +15,7 @@ import qrcode from 'qrcode'
 import { printQR, removeQR } from './lib/qr.js'
 
 import { env, envBool, envInt } from './config/env.js'
-import { isBanned, isOwner, isAdmin, clean, registerLidMapping } from './lib/perms.js'
+import { isBanned, isOwner, isAdmin, clean, registerLidMapping, getSenderId } from './lib/perms.js'
 import { serialize } from './lib/serialize.js'
 import { loadDB, saveDB, flushDB, defaultDB, SESSION_DIR } from './lib/store.js'
 import { resolveVersion } from './lib/baileys-version.js'
@@ -428,6 +428,11 @@ async function handleMessage(socket, raw, processedIds) {
   const chat = m.key.remoteJid
   const isGroup = chat.endsWith('@g.us')
   const sender = normalizedId(m.key.participant || m.key.remoteJid)
+
+  // El id con el que se guarda estado (ban, AFK, mute, owners). Puede venir
+  // como @lid si WhatsApp manda la conversacion en modo lid: se usa el numero
+  // real del campo alterno para que mute/ban/AFK no se esquiven.
+  const senderId = getSenderId(m)
   const botJid = normalizedId(socket.user?.id || '')
 
   // --- Revocados ---
@@ -499,7 +504,7 @@ async function handleMessage(socket, raw, processedIds) {
   }
 
   // --- Mute ---
-  if (isGroup && global.db.data.muted.includes(sender)) {
+  if (isGroup && global.db.data.muted.includes(senderId)) {
     await socket
       .sendMessage(chat, {
         delete: { remoteJid: chat, fromMe: false, id: msgId, participant: m.key.participant },
@@ -509,7 +514,7 @@ async function handleMessage(socket, raw, processedIds) {
   }
 
   // --- Banned ---
-  if (isBanned(sender, global.db)) return
+  if (isBanned(senderId, global.db)) return
 
   // --- Antilink ---
   if (isGroup && global.db.config.antilink.includes(chat)) {
@@ -525,11 +530,11 @@ async function handleMessage(socket, raw, processedIds) {
 
   // --- Antispam ---
   if (isGroup && global.db.config.antispam.includes(chat)) {
-    if (!global._spamCount[sender]) global._spamCount[sender] = []
+    if (!global._spamCount[senderId]) global._spamCount[senderId] = []
     const now = Date.now()
-    global._spamCount[sender] = global._spamCount[sender].filter((t) => now - t < 5000)
-    global._spamCount[sender].push(now)
-    if (global._spamCount[sender].length > 5) {
+    global._spamCount[senderId] = global._spamCount[senderId].filter((t) => now - t < 5000)
+    global._spamCount[senderId].push(now)
+    if (global._spamCount[senderId].length > 5) {
       await socket
         .sendMessage(chat, {
           delete: { remoteJid: chat, fromMe: false, id: msgId, participant: m.key.participant },
@@ -539,9 +544,9 @@ async function handleMessage(socket, raw, processedIds) {
   }
 
   // --- AFK: el usuario vuelve ---
-  if (isGroup && global.db.data.afk[sender]) {
-    const afkData = global.db.data.afk[sender]
-    delete global.db.data.afk[sender]
+  if (isGroup && global.db.data.afk[senderId]) {
+    const afkData = global.db.data.afk[senderId]
+    delete global.db.data.afk[senderId]
     saveDB()
     const elapsed = Math.floor((Date.now() - afkData.since) / 1000)
     const mins = Math.floor(elapsed / 60)
@@ -614,7 +619,7 @@ async function handleMessage(socket, raw, processedIds) {
   }
 
   // --- Modo privado: solo owners/admins ---
-  if (global.db.config.mode === 'private' && !isOwner(sender) && !isAdmin(sender, global.db)) {
+  if (global.db.config.mode === 'private' && !isOwner(senderId) && !isAdmin(senderId, global.db)) {
     return
   }
 

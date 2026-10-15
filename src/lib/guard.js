@@ -1,14 +1,15 @@
-import { clean, isOwner, isAdmin, getOwnerInfo } from './perms.js'
+import { clean, isOwner, isAdmin, getSenderId, getOwnerInfo } from './perms.js'
 
-/** Devuelve el id del usuario que ejecutó el comando, normalizado. */
+/**
+ * Devuelve el id del usuario que ejecutó el comando, normalizado.
+ *
+ * Delega en getSenderId: hace lo mismo, pero además mira remoteJidAlt /
+ * participantAlt para no quedarse con el @lid cuando el numero real viene en
+ * el campo alterno. Tener dos copias de esta lógica es justamente lo que hizo
+ * que un owner fuera owner en un comando y no en otro.
+ */
 export function senderOf(m = {}) {
-  const raw =
-    m.key?.participant ||
-    m.key?.remoteJid ||
-    m.sender ||
-    m.participant ||
-    ''
-  return clean(raw)
+  return getSenderId(m)
 }
 
 /** ¿El usuario es owner o admin del bot? */
