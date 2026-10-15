@@ -25,9 +25,8 @@ const execFileAsync = promisify(execFile)
 
 const PORT = envInt('PORT', 3000)
 const LOG_LEVEL = env('LOG_LEVEL', 'error')
-const QR_TOKEN = randomBytes(24).toString('hex')
 const railwayDomain = env('RAILWAY_PUBLIC_DOMAIN').replace(/^https?:\/\//, '').replace(/\/+$/, '')
-const QR_IMAGE_URL = `${railwayDomain ? `https://${railwayDomain}` : `http://localhost:${PORT}`}/qr/${QR_TOKEN}`
+const QR_BASE_URL = railwayDomain ? `https://${railwayDomain}` : `http://localhost:${PORT}`
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -49,18 +48,18 @@ let conn = null
 let reconnectAttempts = 0
 let reconnectTimer = null
 let stopping = false
-let qrPrinted = false
 let saveCredsRef = null
 let activeQR = null
+let activeQRToken = null
 
 // ─────────────────────────────────────────────
 // Healthcheck HTTP (scope de módulo: no se duplica al reconectar)
 // ─────────────────────────────────────────────
 const healthServer = http.createServer((req, res) => {
-  if (req.method === 'GET' && req.url === `/qr/${QR_TOKEN}`) {
-    if (!activeQR) {
+  if (req.method === 'GET' && req.url.startsWith('/qr/')) {
+    if (!activeQR || !activeQRToken || req.url !== `/qr/${activeQRToken}`) {
       res.writeHead(410, { 'Content-Type': 'text/plain', 'Cache-Control': 'no-store' })
-      res.end('El QR ya no está activo; espera el nuevo enlace en los logs.')
+      res.end('Este QR ya venció. Abre el enlace más reciente de los logs.')
       return
     }
 
@@ -230,15 +229,19 @@ socket.ev.on('creds.update', async () => {
   socket.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update
 
-    if (qr && !qrPrinted) {
-      qrPrinted = true
+    if (qr && qr !== activeQR) {
       activeQR = qr
-      printQR(qr, { terminal: false, imageUrl: QR_IMAGE_URL })
+      activeQRToken = randomBytes(24).toString('hex')
+      printQR(qr, {
+        terminal: false,
+        imageUrl: `${QR_BASE_URL}/qr/${activeQRToken}`,
+      })
     }
 
     if (connection === 'open') {
       global._connected = true
       activeQR = null
+      activeQRToken = null
       reconnectAttempts = 0
       console.log('✅ Bot conectado correctamente')
       global._startTime = Date.now()
@@ -266,8 +269,8 @@ if (stopping) return
 
       // El QR es de un solo uso: hay que permitir mostrar el siguiente.
       // Sin esto, tras un 515 reconecta en silencio y nunca ves el QR nuevo.
-      qrPrinted = false
       activeQR = null
+      activeQRToken = null
       removeQR()
 
       // 401 = WhatsApp revocó la sesión. Ahí sí no hay nada que reconectar.
