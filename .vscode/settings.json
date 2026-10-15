@@ -1,0 +1,24 @@
+{
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.formatOnSave": false,
+  "editor.codeActionsOnSave": {},
+  "files.eol": "\n",
+  "files.encoding": "utf8",
+  "javascript.languageOptions": {
+    "moduleDetection": "force"
+  },
+  "javascript.suggest.autoImports": true,
+  "typescript.suggest.autoImports": true,
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/sessions": true,
+    "**/temp": true,
+    "**/tmp": true,
+    "**/database.json": true
+  },
+  "files.exclude": {
+    "**/sessions": true,
+    "**/temp": true
+  },
+  "emmet.showExpandedAbbreviation": "never"
+}

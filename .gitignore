@@ -1,0 +1,12 @@
+sessions/
+node_modules/
+temp/
+tmp/
+contacts.json
+.env
+.env.local
+qr.png
+*.log
+src/instagram_cookies.txt
+src/youtube_cookies.txt
+!database.json

@@ -1,0 +1,43 @@
+{
+  "version": "0.2.0",
+  "tasks": [
+    {
+      "label": "▶ Iniciar bot",
+      "type": "node",
+      "script": "start",
+      "problemMatcher": [],
+      "isBackground": true,
+      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "group": { "kind": "build", "isDefault": true }
+    },
+    {
+      "label": "🔑 Login (QR nuevo)",
+      "type": "node",
+      "script": "login",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
+      "label": "🧹 Limpiar sesiones y procesos",
+      "type": "node",
+      "script": "clean -- --yes",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
+      "label": "🧪 Correr tests",
+      "type": "node",
+      "script": "test",
+      "problemMatcher": [],
+      "group": { "kind": "test", "isDefault": true },
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
+      "label": "🧹 Limpiar (dry run)",
+      "type": "node",
+      "script": "clean",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always" }
+    }
+  ]
+}

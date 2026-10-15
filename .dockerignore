@@ -1,0 +1,10 @@
+node_modules
+sessions
+temp
+tmp
+qr.png
+.git
+.gitignore
+*.log
+src/instagram_cookies.txt
+src/youtube_cookies.txt

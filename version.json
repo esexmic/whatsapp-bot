@@ -1,0 +1,5 @@
+{
+  "hash": "c8c1aff5a2de69b3431f2fb2cbd0dc893cfa04af",
+  "msg": "fix: use .cjs for postinstall script to avoid ESM issues in Railway build",
+  "date": "2026-07-04 18:53:19 -0600"
+}
