@@ -4,7 +4,7 @@ FROM node:20-slim
 # git para el comando .version, python3 para extractores de yt-dlp,
 # ca-certificates para descargas HTTPS.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      dumb-init ffmpeg curl git python3 ca-certificates fonts-dejavu-core \
+  dumb-init ffmpeg curl git gosu python3 ca-certificates fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 # yt-dlp con verificación de checksum contra el manifiesto oficial
@@ -25,14 +25,17 @@ RUN npm ci --omit=dev && npm cache clean --force
 
 COPY . .
 
-# Usuario sin privilegios
-RUN mkdir -p /app/sessions && chown -R node:node /app
-USER node
+# Railway monta el volumen después de construir la imagen; su propietario no
+# hereda el chown de build. El entrypoint lo corrige antes de bajar privilegios.
+RUN chmod 755 /app/scripts/docker-entrypoint.sh \
+  && mkdir -p /app/sessions \
+  && chown -R node:node /app
+USER root
 
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
   CMD node -e "require('http').get('http://127.0.0.1:'+(process.env.PORT||3000),r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
 
-ENTRYPOINT ["dumb-init", "--"]
+ENTRYPOINT ["dumb-init", "--", "/app/scripts/docker-entrypoint.sh"]
 CMD ["node", "src/index.js"]
