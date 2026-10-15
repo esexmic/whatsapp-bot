@@ -8,11 +8,14 @@ import { env } from '../config/env.js'
 // En México el JID real de WhatsApp trae el "1" de movil después del 52
 // (+52 1 813 588 2145 -> "5218135882145"). Se listan las dos formas para que
 // el match sea directo y no dependa de expandNumber().
+//
+// `name` es lo que muestra .roles: manda sobre el nombre cacheado de
+// WhatsApp, porque un owner puede tener su perfil con cualquier texto.
 const HARD_OWNERS = [
-  { id: "16787062887", name: "Owner", active: true },
+  { id: "16787062887", name: "Aaron", active: true },
   { id: "16787061883", name: "Owner", active: true },
-  { id: "528135882145", name: "Owner", active: true },
-  { id: "5218135882145", name: "Owner", active: true },
+  { id: "528135882145", name: "Csr", active: true },
+  { id: "5218135882145", name: "Csr", active: true },
 ]
 
 const ENV_OWNERS = env('OWNER_ID')
@@ -24,8 +27,22 @@ const OWNER_IDS_RAW = [...new Set([...HARD_OWNERS.map((o) => o.id), ...ENV_OWNER
 
 export let OWNER_IDS = []
 
+/**
+ * ¿Son la misma persona? Compara las variantes de número, porque en México
+ * "528135882145" y "5218135882145" son el mismo contacto escrito de dos
+ * formas. Sin esto .roles listaba al owner de México dos veces.
+ */
+function samePerson(a, b) {
+  if (a === b) return true
+  const variants = new Set(expandNumber(a))
+  return expandNumber(b).some((v) => variants.has(v))
+}
+
 function rebuildOwnerIds() {
-  OWNER_IDS = [...new Set(OWNER_IDS_RAW.map((id) => clean(id)).filter(Boolean))]
+  const ids = [...new Set(OWNER_IDS_RAW.map((id) => clean(id)).filter(Boolean))]
+  // Se conserva la primera forma de cada persona y se descartan las
+  // siguientes que sean la misma (solo compara contra las anteriores).
+  OWNER_IDS = ids.filter((id, i) => !ids.some((other, j) => j < i && samePerson(id, other)))
 }
 rebuildOwnerIds()
 

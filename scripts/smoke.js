@@ -1,5 +1,5 @@
 import assert from 'assert'
-import { isOwner, isAdmin, clean } from '../src/lib/perms.js'
+import { isOwner, isAdmin, clean, OWNER_IDS, getOwnerInfo } from '../src/lib/perms.js'
 import { isStaff, senderOf } from '../src/lib/guard.js'
 import { loadDB, saveDB, defaultDB, DB_FILE } from '../src/lib/store.js'
 import { validateUrl } from '../src/lib/ytdlp.js'
@@ -27,6 +27,21 @@ t('owner de Mexico con @s.whatsapp.net', () => assert.ok(isOwner('528135882145@s
 t('owner de Mexico con :device', () => assert.ok(isOwner('528135882145:9@s.whatsapp.net')))
 t('owner de Mexico en formato JID real (+52 1 ...)', () => assert.ok(isOwner('5218135882145@s.whatsapp.net')))
 t('owner de Mexico con + y espacios', () => assert.ok(isOwner('+52 81 3588 2145')))
+t('.roles no lista dos veces al owner de Mexico', () => {
+  assert.ok(!OWNER_IDS.includes('5218135882145') || !OWNER_IDS.includes('528135882145'),
+    'las dos formas del mismo numero siguen en la lista')
+})
+t('los 3 owners unicos siguen en la lista', () => {
+  assert.ok(OWNER_IDS.includes('16787062887'))
+  assert.ok(OWNER_IDS.includes('16787061883'))
+  assert.ok(OWNER_IDS.includes('528135882145'))
+})
+t('getOwnerInfo trae el nombre del owner', () => {
+  assert.equal(getOwnerInfo('16787062887')?.name, 'Aaron')
+  assert.equal(getOwnerInfo('528135882145')?.name, 'Csr')
+  assert.equal(getOwnerInfo('5218135882145')?.name, 'Csr')
+})
+t('getOwnerInfo no inventa nombres para desconocidos', () => assert.equal(getOwnerInfo('529999999999'), undefined))
 t('owner antiguo 116715954372809 ya NO es owner', () => assert.ok(!isOwner('116715954372809')))
 t('desconocido NO es owner', () => assert.ok(!isOwner('999999999999')))
 t('numero corto con sufijo de owner NO cuela', () => assert.ok(!isOwner('62887')))
