@@ -28,14 +28,17 @@ export function printQR(payload, { file = 'qr.png', label = true, terminal = tru
     }
   }
 
+  if (imageUrl) {
+    console.log('')
+    console.log(`🔗 Abre este enlace para ver el QR como imagen: ${imageUrl}`)
+  }
+
   const qrPath = path.resolve(process.cwd(), file)
   qrcode
     .toFile(qrPath, url, { width: 600, margin: 2 })
     .then(() => {
       console.log(`🖼️  QR guardado en: ${qrPath}`)
-      if (imageUrl) {
-        console.log(`🔗 Abre este enlace para ver el QR como imagen: ${imageUrl}`)
-      } else {
+      if (!imageUrl) {
         console.log('🔗 Link (alternativa si no se escanea la terminal):')
         console.log(url)
         console.log('    Ábrelo con doble click o desde el celular.')

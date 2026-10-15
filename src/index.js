@@ -11,6 +11,7 @@ import { fileURLToPath } from 'url'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import http from 'http'
+import qrcode from 'qrcode'
 import { printQR, removeQR } from './lib/qr.js'
 
 import { env, envBool, envInt } from './config/env.js'
@@ -50,26 +51,33 @@ let reconnectTimer = null
 let stopping = false
 let qrPrinted = false
 let saveCredsRef = null
+let activeQR = null
 
 // ─────────────────────────────────────────────
 // Healthcheck HTTP (scope de módulo: no se duplica al reconectar)
 // ─────────────────────────────────────────────
 const healthServer = http.createServer((req, res) => {
   if (req.method === 'GET' && req.url === `/qr/${QR_TOKEN}`) {
-    fs.readFile(path.resolve(process.cwd(), 'qr.png'), (err, image) => {
-      if (err) {
-        res.writeHead(404, { 'Content-Type': 'text/plain', 'Cache-Control': 'no-store' })
-        res.end('QR no disponible')
-        return
-      }
+    if (!activeQR) {
+      res.writeHead(410, { 'Content-Type': 'text/plain', 'Cache-Control': 'no-store' })
+      res.end('El QR ya no está activo; espera el nuevo enlace en los logs.')
+      return
+    }
 
-      res.writeHead(200, {
-        'Content-Type': 'image/png',
-        'Cache-Control': 'no-store, no-cache, must-revalidate',
-        'X-Content-Type-Options': 'nosniff',
+    qrcode.toBuffer(activeQR, { width: 600, margin: 2 })
+      .then((image) => {
+        res.writeHead(200, {
+          'Content-Type': 'image/png',
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+          'X-Content-Type-Options': 'nosniff',
+        })
+        res.end(image)
       })
-      res.end(image)
-    })
+      .catch((err) => {
+        console.error('[qr] no se pudo generar la imagen:', err.message)
+        res.writeHead(500, { 'Content-Type': 'text/plain', 'Cache-Control': 'no-store' })
+        res.end('No se pudo generar el QR')
+      })
     return
   }
 
@@ -224,11 +232,13 @@ socket.ev.on('creds.update', async () => {
 
     if (qr && !qrPrinted) {
       qrPrinted = true
+      activeQR = qr
       printQR(qr, { terminal: false, imageUrl: QR_IMAGE_URL })
     }
 
     if (connection === 'open') {
       global._connected = true
+      activeQR = null
       reconnectAttempts = 0
       console.log('✅ Bot conectado correctamente')
       global._startTime = Date.now()
@@ -257,6 +267,7 @@ if (stopping) return
       // El QR es de un solo uso: hay que permitir mostrar el siguiente.
       // Sin esto, tras un 515 reconecta en silencio y nunca ves el QR nuevo.
       qrPrinted = false
+      activeQR = null
       removeQR()
 
       // 401 = WhatsApp revocó la sesión. Ahí sí no hay nada que reconectar.
