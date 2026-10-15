@@ -5,7 +5,7 @@ import { Readable } from 'stream'
 import { encryptedStream } from '@whiskeysockets/baileys'
 import webpmux from 'node-webpmux'
 import { makeSticker, makeStickerWithText, toBuffer } from '../src/lib/sticker.js'
-import { addStickerMetadata } from '../src/lib/sticker-exif.js'
+import { addStickerMetadata, isAnimatedWebP } from '../src/lib/sticker-exif.js'
 import { downloadMediaBuffer, findMedia } from '../src/lib/media.js'
 import { parseStickerOptions } from '../src/lib/sticker-options.js'
 import { cacheContact, contactName } from '../src/lib/contacts.js'
@@ -27,6 +27,18 @@ async function samplePng(w = 800, h = 600) {
   return sharp({ create: { width: w, height: h, channels: 3, background: { r: 10, g: 120, b: 200 } } })
     .png()
     .toBuffer()
+}
+
+/** Sticker WebP animado de N frames, igual que los que manda WhatsApp. */
+async function sampleAnimatedWebp(frames = 3, size = 512) {
+  const { Image } = webpmux
+  const frame = new Image()
+  await frame.load(await sharp(await samplePng(64, 64)).webp().toBuffer())
+  const list = []
+  for (let i = 0; i < frames; i++) {
+    list.push(await Image.generateFrame({ img: frame, delay: 100 }))
+  }
+  return Image.save(null, { width: size, height: size, frames: list })
 }
 
 function readStickerMetadata(exif) {
@@ -90,6 +102,52 @@ await t('añade metadata sin perder la animación WebP', async () => {
   const metadata = readStickerMetadata(result.exif)
   assert.equal(metadata['sticker-pack-name'], 'Animado')
   assert.equal(metadata['sticker-pack-publisher'], 'Bot')
+})
+
+await t('.wm sobre un sticker animado conserva TODOS los frames', async () => {
+  const { Image } = webpmux
+  const animated = await sampleAnimatedWebp(3)
+  const renamed = await makeSticker(animated, { packname: 'nombre', author: 'xyb' })
+
+  const result = new Image()
+  await result.load(renamed)
+
+  // El bug: sharp con animated:false se come todos los frames menos el primero.
+  assert.ok(result.hasAnim, 'el sticker volvió estático: se perdió la animación')
+  assert.equal(result.frames.length, 3, 'se perdieron frames')
+
+  const metadata = readStickerMetadata(result.exif)
+  assert.equal(metadata['sticker-pack-name'], 'nombre')
+  assert.equal(metadata['sticker-pack-publisher'], 'xyb')
+})
+
+await t('re-escala un sticker animado gigante sin perder frames', async () => {
+  const { Image } = webpmux
+  const oversized = await sampleAnimatedWebp(3, 700)
+  const resized = await makeSticker(oversized, { packname: 'n', author: 'xyb' })
+
+  const m = await sharp(resized).metadata()
+  assert.equal(m.width, 512)
+  assert.equal(m.height, 512)
+
+  const result = new Image()
+  await result.load(resized)
+  assert.equal(result.frames.length, 3, 'el reescalado perdió frames')
+})
+
+await t('detecta WebP animado sin confundir un sticker normal', async () => {
+  assert.equal(isAnimatedWebP(await sampleAnimatedWebp(2)), true)
+  assert.equal(isAnimatedWebP(await makeSticker(await samplePng(), {})), false)
+  assert.equal(isAnimatedWebP(await samplePng()), false)
+  assert.equal(isAnimatedWebP(Buffer.from('esto no es una imagen')), false)
+  assert.equal(isAnimatedWebP(Buffer.alloc(0)), false)
+  assert.equal(isAnimatedWebP(null), false)
+  assert.equal(isAnimatedWebP(undefined), false)
+})
+
+await t('isAnimatedWebP no se cuelga con un WebP truncado', async () => {
+  const animated = await sampleAnimatedWebp(2)
+  assert.equal(isAnimatedWebP(animated.subarray(0, 30)), false)
 })
 
 await t('acepta base64 y URL-like strings', async () => {

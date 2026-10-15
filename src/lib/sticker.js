@@ -1,5 +1,5 @@
 import sharp from 'sharp'
-import { addStickerMetadata } from './sticker-exif.js'
+import { addStickerMetadata, isAnimatedWebP } from './sticker-exif.js'
 
 /**
  * Generador de stickers de WhatsApp.
@@ -49,6 +49,36 @@ export async function toBuffer(input) {
  */
 export async function makeSticker(input, { packname = 'bot', author = 'xyb', quality = 90 } = {}) {
   const buffer = await toBuffer(input)
+
+  // Un sticker animado de WhatsApp llega como stickerMessage, o sea type
+  // 'sticker'. Si cayera en el sharp de abajo se quedaría en un solo frame:
+  // el nombre se aplicaría bien pero el movimiento desaparecería. Por eso a los
+  // animados no se los toca — solo se les cambia el EXIF.
+  if (isAnimatedWebP(buffer)) {
+    const { width, height } = await sharp(buffer, { failOn: 'none' }).metadata()
+
+    // Ya viene en 512x512 (tamaño de sticker de WhatsApp): remux limpio, los
+    // chunks ANIM/ANMF quedan intactos y no se pierde ni un frame.
+    if (width <= MAX && height <= MAX) {
+      return addStickerMetadata(buffer, { packname, author })
+    }
+
+    // Excede 512x512 y WhatsApp lo rechazaría. `animated: true` sí procesa
+    // todas las páginas, así que el movimiento sobrevive al reescalado.
+    const resized = await sharp(buffer, { failOn: 'none', animated: true })
+      .resize(MAX, MAX, {
+        fit: 'cover',
+        position: 'centre',
+        background: { r: 0, g: 0, b: 0, alpha: 0 },
+      })
+      .webp({
+        quality: Math.min(100, Math.max(1, quality)),
+        effort: 4,
+      })
+      .toBuffer()
+
+    return addStickerMetadata(resized, { packname, author })
+  }
 
   const image = sharp(buffer, { failOn: 'none', animated: false })
     .rotate() // respeta EXIF de orientación
