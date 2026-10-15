@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { downloadContentFromMessage } from '@whiskeysockets/baileys'
+import { downloadMediaBuffer } from '../lib/media.js'
 
 export default async function handler(conn, m) {
   const chat = m.chat || m.key?.remoteJid
@@ -12,7 +12,7 @@ export default async function handler(conn, m) {
   }
 
   try {
-    const buffer = await downloadContentFromMessage(image, 'buffer', {})
+    const buffer = await downloadMediaBuffer(image, 'image')
     const b64 = buffer.toString('base64')
     const res = await axios.post(
       'https://api.qrserver.com/v1/read-qr-code/',

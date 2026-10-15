@@ -13,7 +13,7 @@
     "check": "node --check src/index.js",
     "clean": "node scripts/clean.js",
     "session": "node scripts/session.js",
-    "test": "node scripts/smoke.js && node scripts/test-guard.js && node scripts/test-sticker.js && node scripts/test-session.js && node scripts/test-cycle.js"
+    "test": "node scripts/smoke.js && node scripts/test-guard.js && node scripts/test-sticker.js && node scripts/test-socialkit.js && node scripts/test-session.js && node scripts/test-cycle.js"
   },
   "keywords": [
     "whatsapp",

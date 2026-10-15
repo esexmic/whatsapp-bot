@@ -1,4 +1,4 @@
-import { downloadContentFromMessage } from '@whiskeysockets/baileys'
+import { downloadMediaBuffer } from '../lib/media.js'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { tmpdir } from 'os'
@@ -38,7 +38,7 @@ export default async function handler(conn, m) {
   const tmpDirs = []
 
   try {
-    const buffer = await downloadContentFromMessage(quotedMsg.stickerMessage, 'buffer', {})
+    const buffer = await downloadMediaBuffer(quotedMsg.stickerMessage, 'sticker')
     if (!buffer || buffer.length < 50) throw new Error('Sticker vacio o corrupto')
 
     const img = new Image()

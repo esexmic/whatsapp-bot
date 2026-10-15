@@ -1,6 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import { downloadContentFromMessage } from '@whiskeysockets/baileys'
+import { downloadMediaBuffer } from '../lib/media.js'
 import { requireStaff } from '../lib/guard.js'
 
 const COOKIE_FILE = path.join(process.cwd(), 'src', 'youtube_cookies.txt')
@@ -32,7 +32,7 @@ export default async function handler(conn, m, args, db) {
   }
 
   try {
-    const buffer = await downloadContentFromMessage(quotedMsg.documentMessage, 'buffer', {})
+    const buffer = await downloadMediaBuffer(quotedMsg.documentMessage, 'document')
     if (!buffer || buffer.length < 50) throw new Error('El archivo está vacío o es inválido.')
 
     const content = buffer.toString('utf-8')

@@ -1,4 +1,4 @@
-import { downloadContentFromMessage } from '@whiskeysockets/baileys'
+import { downloadMediaBuffer } from '../lib/media.js'
 import { FFMPEG } from '../lib/ytdlp.js'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
@@ -19,7 +19,7 @@ export default async function handler(conn, m) {
   const dir = mkdtempSync(join(tmpdir(), 'img_'))
 
   try {
-    const buffer = await downloadContentFromMessage(quoted.stickerMessage, 'buffer', {})
+    const buffer = await downloadMediaBuffer(quoted.stickerMessage, 'sticker')
     const tmpInput = join(dir, 'in.webp')
     const tmpOutput = join(dir, 'out.png')
     writeFileSync(tmpInput, buffer)

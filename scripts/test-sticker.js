@@ -1,6 +1,13 @@
 import assert from 'assert'
+import { readFileSync, unlinkSync } from 'fs'
 import sharp from 'sharp'
+import { Readable } from 'stream'
+import { encryptedStream } from '@whiskeysockets/baileys'
+import webpmux from 'node-webpmux'
 import { makeSticker, makeStickerWithText, toBuffer } from '../src/lib/sticker.js'
+import { addStickerMetadata } from '../src/lib/animated-sticker.js'
+import { downloadMediaBuffer, findMedia } from '../src/lib/media.js'
+import { parseStickerOptions } from '../src/lib/sticker-options.js'
 import { cacheContact, contactName } from '../src/lib/contacts.js'
 
 let pass = 0
@@ -50,6 +57,31 @@ await t('incluye EXIF con pack y autor', async () => {
   const s = await makeSticker(await samplePng(), { packname: 'MiPack', author: 'MiAutor' })
   const m = await sharp(s).metadata()
   assert.ok(m.exif && m.exif.length > 0, 'sin EXIF: WhatsApp no mostraría el pack')
+  const exifText = m.exif.toString('latin1')
+  assert.ok(exifText.includes('MiPack'), 'el pack personalizado no quedó guardado')
+  assert.ok(exifText.includes('MiAutor'), 'el autor personalizado no quedó guardado')
+})
+
+await t('añade metadata sin perder la animación WebP', async () => {
+  const { Image } = webpmux
+  const frameBuffer = await sharp(await samplePng(64, 64)).webp().toBuffer()
+  const sourceImage = new Image()
+  await sourceImage.load(frameBuffer)
+  const frames = [
+    await Image.generateFrame({ img: sourceImage, delay: 100 }),
+    await Image.generateFrame({ img: sourceImage, delay: 100 }),
+  ]
+  const animated = await Image.save(null, { width: 64, height: 64, frames })
+  const output = await addStickerMetadata(animated, { packname: 'Animado', author: 'Bot' })
+  const result = new Image()
+  await result.load(output)
+
+  assert.ok(result.hasAnim, 'se perdió la animación')
+  assert.equal(result.frames.length, 2)
+  assert.ok(result.exif, 'se perdió el EXIF')
+  const exifText = result.exif.toString('latin1')
+  assert.ok(exifText.includes('Animado'), 'el pack animado no quedó guardado')
+  assert.ok(exifText.includes('Bot'), 'el autor animado no quedó guardado')
 })
 
 await t('acepta base64 y URL-like strings', async () => {
@@ -87,6 +119,78 @@ await t('normaliza base64', async () => {
 })
 await t('rechaza null', async () => {
   await assert.rejects(() => toBuffer(null))
+})
+
+console.log('\n== descarga de media WhatsApp ==')
+for (const [field, type] of [
+  ['imageMessage', 'image'],
+  ['videoMessage', 'video'],
+  ['stickerMessage', 'sticker'],
+]) {
+  await t(`detecta ${type} para derivar la clave de descarga`, () => {
+    const content = { id: type }
+    assert.deepEqual(findMedia({ [field]: content }), { content, type })
+  })
+}
+
+for (const type of ['image', 'video', 'sticker', 'document']) {
+  await t(`descarga ${type} como Buffer usando el tipo correcto`, async () => {
+    const message = { mediaKey: Buffer.from('key') }
+    const output = await downloadMediaBuffer(message, type, async (received, actualType) => {
+      assert.strictEqual(received, message)
+      assert.equal(actualType, type)
+      return Readable.from([Buffer.from('web'), Buffer.from('p')])
+    })
+    assert.equal(output.toString(), 'webp')
+  })
+}
+
+await t('rechaza "buffer" antes de intentar descifrar', async () => {
+  await assert.rejects(
+    () => downloadMediaBuffer({}, 'buffer', async () => assert.fail('no debería descargar')),
+    /Tipo de medio de WhatsApp no válido/
+  )
+})
+
+await t('descifra el contenido AES con el tipo exacto de Baileys', async () => {
+  const original = Buffer.from('synthetic whatsapp media payload '.repeat(8))
+  const encrypted = await encryptedStream(original, 'video')
+  const ciphertext = readFileSync(encrypted.encFilePath)
+  const previousFetch = globalThis.fetch
+  globalThis.fetch = async () => new Response(ciphertext)
+
+  try {
+    const message = { mediaKey: encrypted.mediaKey, url: 'https://media.test/video' }
+    const decrypted = await downloadMediaBuffer(message, 'video')
+    assert.deepEqual(decrypted, original)
+    await assert.rejects(() => downloadMediaBuffer(message, 'image'))
+  } finally {
+    globalThis.fetch = previousFetch
+    unlinkSync(encrypted.encFilePath)
+  }
+})
+
+console.log('\n== nombres de pack y autor ==')
+await t('acepta pack y autor separados por pipe', () => {
+  assert.deepEqual(parseStickerOptions(['Mi', 'Pack|Mi', 'Autor']), {
+    packname: 'Mi Pack',
+    author: 'Mi Autor',
+  })
+})
+await t('acepta pack y autor separados por slash', () => {
+  assert.deepEqual(parseStickerOptions(['MiPack/Autor']), { packname: 'MiPack', author: 'Autor' })
+})
+await t('conserva autor configurado cuando solo se cambia el pack', () => {
+  assert.deepEqual(parseStickerOptions(['Nuevo'], { packname: 'Anterior', author: 'Bot' }), {
+    packname: 'Nuevo',
+    author: 'Bot',
+  })
+})
+await t('usa pack y autor configurados por defecto', () => {
+  assert.deepEqual(parseStickerOptions([], { packname: 'MiPack', author: 'MiBot' }), {
+    packname: 'MiPack',
+    author: 'MiBot',
+  })
 })
 
 console.log('\n== contacts (el crash "Cannot set properties of undefined") ==')
