@@ -6,6 +6,7 @@
 import P from 'pino'
 import fs from 'fs'
 import path from 'path'
+import { randomBytes } from 'crypto'
 import { fileURLToPath } from 'url'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
@@ -23,6 +24,9 @@ const execFileAsync = promisify(execFile)
 
 const PORT = envInt('PORT', 3000)
 const LOG_LEVEL = env('LOG_LEVEL', 'error')
+const QR_TOKEN = randomBytes(24).toString('hex')
+const railwayDomain = env('RAILWAY_PUBLIC_DOMAIN').replace(/^https?:\/\//, '').replace(/\/+$/, '')
+const QR_IMAGE_URL = `${railwayDomain ? `https://${railwayDomain}` : `http://localhost:${PORT}`}/qr/${QR_TOKEN}`
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -50,7 +54,25 @@ let saveCredsRef = null
 // ─────────────────────────────────────────────
 // Healthcheck HTTP (scope de módulo: no se duplica al reconectar)
 // ─────────────────────────────────────────────
-const healthServer = http.createServer((_, res) => {
+const healthServer = http.createServer((req, res) => {
+  if (req.method === 'GET' && req.url === `/qr/${QR_TOKEN}`) {
+    fs.readFile(path.resolve(process.cwd(), 'qr.png'), (err, image) => {
+      if (err) {
+        res.writeHead(404, { 'Content-Type': 'text/plain', 'Cache-Control': 'no-store' })
+        res.end('QR no disponible')
+        return
+      }
+
+      res.writeHead(200, {
+        'Content-Type': 'image/png',
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+        'X-Content-Type-Options': 'nosniff',
+      })
+      res.end(image)
+    })
+    return
+  }
+
   const connected = Boolean(global._connected)
   res.writeHead(connected ? 200 : 503, { 'Content-Type': 'text/plain' })
   res.end(connected ? 'OK' : 'STARTING')
@@ -202,7 +224,7 @@ socket.ev.on('creds.update', async () => {
 
     if (qr && !qrPrinted) {
       qrPrinted = true
-      printQR(qr)
+      printQR(qr, { terminal: false, imageUrl: QR_IMAGE_URL })
     }
 
     if (connection === 'open') {

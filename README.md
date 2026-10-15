@@ -31,6 +31,20 @@ Copia `.env.example` a `.env`:
 | `LOG_LEVEL` | no | Log de Baileys: `silent`, `error`, `warn`, `info` |
 | `AUTO_UPDATE_YTDLP` | no | `true` para actualizar yt-dlp al conectar |
 
+## Railway
+
+Despliega el repositorio con el `Dockerfile` y genera un dominio público en
+**Settings → Networking**. Railway proporciona `PORT` y `RAILWAY_PUBLIC_DOMAIN`;
+no necesitas definirlos manualmente. Para iniciar WhatsApp no hace falta ninguna
+API key: `RAPIDAPI_KEY` (CURP/utilidades) y `SOCIALKIT_KEY` (TikTok/Instagram)
+son opcionales, y debes pegar en Railway tus propias claves emitidas por esos
+servicios si quieres usar esas funciones. `OWNER_ID` también es opcional.
+
+En el primer arranque, abre el enlace `/qr/...` que aparece en los logs de Railway:
+se mostrará directamente la imagen del QR y dejará de imprimirse en la consola.
+El enlace solo funciona mientras haya un QR pendiente. Añade un volumen Railway
+montado en `/app/sessions` para conservar la sesión de WhatsApp entre despliegues.
+
 > ## ⚠️ Rotar claves (urgente)
 >
 > `RAPIDAPI_KEY` y `SOCIALKIT_KEY` estuvieron commiteadas en `.env` y **siguen
