@@ -3,9 +3,16 @@ import { env } from '../config/env.js'
 
 // Owners hardcoded y dinámicos
 // formato: { id, name (nombre en wpp), active (true/false) }
+// Solo el numero, sin + ni espacios: +1 678 706 2887 -> "16787062887"
+//
+// En México el JID real de WhatsApp trae el "1" de movil después del 52
+// (+52 1 813 588 2145 -> "5218135882145"). Se listan las dos formas para que
+// el match sea directo y no dependa de expandNumber().
 const HARD_OWNERS = [
   { id: "16787062887", name: "Owner", active: true },
   { id: "16787061883", name: "Owner", active: true },
+  { id: "528135882145", name: "Owner", active: true },
+  { id: "5218135882145", name: "Owner", active: true },
 ]
 
 const ENV_OWNERS = env('OWNER_ID')
