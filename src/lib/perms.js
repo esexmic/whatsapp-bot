@@ -41,6 +41,40 @@ export function clean(jid = "") {
   return value
 }
 
+/**
+ * WhatsApp identifica a cada persona con DOS ids: su numero (@s.whatsapp.net)
+ * y un LID (@lid) propio del dispositivo. En grupos es normal que
+ * `key.participant` venga ya como LID, y ese numero NO coincide con el del
+ * owner: `isOwner` devolvia false mientras `.roles` si lo listaba como owner.
+ * De ahi el "en el menu dice owner pero los comandos dicen que no".
+ *
+ * Baileys avisa de cada equivalencia con el evento 'lid-mapping.update' y
+ * tambien llega en `contacts.upsert` (campos `lid` y `pn`). Se guardan aqui
+ * para poder traducir un id al otro en el momento de comparar.
+ */
+const lidMap = new Map()
+
+/** Aprende que un @lid corresponde a un @s.whatsapp.net. */
+export function registerLidMapping(lid, pn) {
+  const lidId = clean(lid)
+  const pnId = clean(pn)
+  if (lidId && pnId && lidId !== pnId) lidMap.set(lidId, pnId)
+}
+
+/**
+ * Todos los ids con los que puede aparecer una misma persona: el suyo y, si
+ * es un LID, tambien su numero real. Sirve para que un owner/admin guardado
+ * por numero siga encontrandose cuando WhatsApp manda el mensaje por LID.
+ */
+export function identityIds(jid = "") {
+  const ids = new Set()
+  const cleaned = clean(jid)
+  if (cleaned) ids.add(cleaned)
+  const pn = lidMap.get(cleaned)
+  if (pn) ids.add(pn)
+  return [...ids]
+}
+
 // Genera variantes del número para comparación flexible
 function expandNumber(num) {
   const variants = [num]
@@ -81,8 +115,9 @@ function isGroupJid(jid = "") {
 
 // 👑 CHECK OWNER (FORZADO Y SEGURO)
 export function getOwnerInfo(jid = "") {
-  const cleaned = clean(jid)
-  return HARD_OWNERS.find(o => o.id === cleaned)
+  const ids = identityIds(jid)
+  if (!ids.length) return undefined
+  return HARD_OWNERS.find(o => o.id && ids.includes(o.id))
 }
 
 export function isOwnerName(name = "") {
@@ -90,16 +125,25 @@ export function isOwnerName(name = "") {
   return HARD_OWNERS.some(o => o.name?.toLowerCase() === name.toLowerCase())
 }
 
+/** ¿Este id (ya limpio) corresponde a un owner, por cualquier via? */
+function matchesOwnerId(cleaned) {
+  if (!cleaned) return false
+  if (HARD_OWNERS.some(o => o.active && o.id === cleaned)) return true
+  if (OWNER_IDS.includes(cleaned)) return true
+  // Owners añadidos dinámicamente vía .makeowner
+  if (global._extraOwners?.includes(cleaned)) return true
+  return false
+}
+
 export function isOwner(jid = "") {
   const cleaned = clean(jid)
   if (!cleaned) return false
 
-  if (HARD_OWNERS.some(o => o.active && o.id === cleaned)) return true
+  if (matchesOwnerId(cleaned)) return true
 
-  if (OWNER_IDS.includes(cleaned)) return true
-
-  // Owners añadidos dinámicamente vía .makeowner
-  if (global._extraOwners?.includes(cleaned)) return true
+  // Si WhatsApp lo mandó como @lid, también se prueba con su numero real: sin
+  // esto el owner pasaba los comandos en privado y le fallaban en grupo.
+  if (identityIds(jid).some(matchesOwnerId)) return true
 
   // Comparación flexible con variantes
   const ids = collectCandidateIds(jid)
@@ -124,15 +168,17 @@ export function isOwner(jid = "") {
 // 🛡️ CHECK ADMIN
 export function isAdmin(sender, db) {
   if (!sender || !db?.data?.admins) return false
-  const cleanSender = clean(sender)
-  return db.data.admins.some(admin => clean(admin) === cleanSender)
+  const ids = identityIds(sender)
+  if (!ids.length) return false
+  return db.data.admins.some(admin => ids.includes(clean(admin)))
 }
 
 // 🛡️ CHECK BANNED
 export function isBanned(sender, db) {
   if (!sender || !db?.data?.banned) return false
-  const cleanSender = clean(sender)
-  return db.data.banned.some(bannedId => clean(bannedId) === cleanSender)
+  const ids = identityIds(sender)
+  if (!ids.length) return false
+  return db.data.banned.some(bannedId => ids.includes(clean(bannedId)))
 }
 
 export function getSenderId(m = {}) {

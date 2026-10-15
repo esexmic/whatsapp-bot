@@ -15,7 +15,7 @@ import qrcode from 'qrcode'
 import { printQR, removeQR } from './lib/qr.js'
 
 import { env, envBool, envInt } from './config/env.js'
-import { isBanned, isOwner, isAdmin, clean } from './lib/perms.js'
+import { isBanned, isOwner, isAdmin, clean, registerLidMapping } from './lib/perms.js'
 import { serialize } from './lib/serialize.js'
 import { loadDB, saveDB, flushDB, defaultDB, SESSION_DIR } from './lib/store.js'
 import { resolveVersion } from './lib/baileys-version.js'
@@ -326,9 +326,17 @@ if (stopping) return
     }
   })
 
+  // WhatsApp manda cada persona con dos ids (numero y @lid). Sin guardar esta
+  // equivalencia, un owner identificado por @lid fallaba en cada comando de
+  // owner aunque .roles lo mostrara como tal.
+  socket.ev.on('lid-mapping.update', ({ lid, pn } = {}) => {
+    registerLidMapping(lid, pn)
+  })
+
   socket.ev.on('contacts.upsert', (contacts) => {
     let changed = false
     for (const c of contacts) {
+      if (c?.lid && c?.pn) registerLidMapping(c.lid, c.pn)
       if (!c.id) continue
       const name = c.notify || c.name || c.pushName
       if (name && cacheContact(socket, normalizedId(c.id), name)) changed = true

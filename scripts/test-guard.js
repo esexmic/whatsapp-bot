@@ -3,12 +3,16 @@
  * que el flujo completo (serialize -> guard -> comando) se comporta bien.
  */
 import assert from 'assert'
-import { isOwner } from '../src/lib/perms.js'
+import { isOwner, isAdmin, isBanned, registerLidMapping } from '../src/lib/perms.js'
 import { requireStaff, requireGroupStaff } from '../src/lib/guard.js'
 
 const OWNER = '16787062887@s.whatsapp.net'
 const STRANGER = '529999999999@s.whatsapp.net'
 const GROUP = '123456@g.us'
+
+// El mismo owner, pero WhatsApp lo manda por su id de dispositivo (@lid).
+const OWNER_LID = '20543633887454@lid'
+const ADMIN_LID = '9998887776@lid'
 
 let pass = 0
 let fail = 0
@@ -105,6 +109,55 @@ await t('en privado requireGroupStaff no pide admin de grupo', async () => {
 
 console.log('\n== owner lockout ==')
 await t('isOwner sigue funcionando tras todos los cambios', () => assert.ok(isOwner('16787062887')))
+
+console.log('\n== @lid: el owner que .roles lista pero los comandos rechazaban ==')
+await t('sin mapeo, un @lid NO es owner (aun)', () => {
+  assert.equal(isOwner(OWNER_LID), false)
+})
+
+await t('tras el mapeo, el owner por @lid pasa en grupo', () => {
+  registerLidMapping(OWNER_LID, OWNER)
+  const c = makeSocket()
+  const ok = requireStaff(c, { key: { remoteJid: GROUP, participant: OWNER_LID } }, db)
+  return ok.then((r) => assert.ok(r))
+})
+
+await t('tras el mapeo, el owner por @lid pasa en privado', () => {
+  const c = makeSocket()
+  const ok = requireStaff(c, { key: { remoteJid: OWNER_LID } }, db)
+  return ok.then((r) => assert.ok(r))
+})
+
+await t('requireGroupStaff tambien acepta al owner por @lid', async () => {
+  const c = makeSocket()
+  assert.ok(await requireGroupStaff(c, { key: { remoteJid: GROUP, participant: OWNER_LID } }, db))
+})
+
+await t('un @lid desconocido NO se cuela como owner', () => {
+  assert.equal(isOwner('1112223334@lid'), false)
+  assert.equal(isOwner(''), false)
+  assert.equal(isOwner(null), false)
+})
+
+await t('un admin del bot guardado por numero se reconoce por su @lid', () => {
+  registerLidMapping(ADMIN_LID, '5215557202760@s.whatsapp.net')
+  const withNumber = { data: { admins: ['5215557202760'] } }
+  assert.equal(isAdmin('5215557202760@s.whatsapp.net', withNumber), true)
+  assert.equal(isAdmin(ADMIN_LID, withNumber), true, 'el admin por @lid no se reconocio')
+  assert.equal(isAdmin('1111111111@s.whatsapp.net', withNumber), false)
+})
+
+await t('un baneado sigue baneado aunque su mensaje llegue por su @lid', () => {
+  registerLidMapping('8887776665@lid', '5215557202761@s.whatsapp.net')
+  const banned = { data: { banned: ['5215557202761'] } }
+  assert.equal(isBanned('5215557202761@s.whatsapp.net', banned), true)
+  assert.equal(
+    isBanned('8887776665@lid', banned),
+    true,
+    'el baneado se escapo por su @lid: seguridad rota'
+  )
+  assert.equal(isBanned('7776665554@lid', banned), false, 'LID sin mapear no debe banear de mas')
+})
 
 console.log(`\n${pass} pasaron, ${fail} fallaron\n`)
 process.exit(fail > 0 ? 1 : 0)

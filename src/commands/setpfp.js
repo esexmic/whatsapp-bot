@@ -1,9 +1,9 @@
 import { downloadContentFromMessage } from '@whiskeysockets/baileys'
-import { isOwner } from '../lib/perms.js'
+import { isOwner, getSenderId } from '../lib/perms.js'
 
 export default async function handler(conn, m, args, db) {
   const chat = m.chat || m.key?.remoteJid
-  const sender = m.key?.participant || m.key?.remoteJid
+  const sender = getSenderId(m)
   if (!isOwner(sender)) return conn.sendMessage(chat, { text: '⛔ Solo owners' }, { quoted: m })
 
   const quoted = m.message?.extendedTextMessage?.contextInfo?.quotedMessage
