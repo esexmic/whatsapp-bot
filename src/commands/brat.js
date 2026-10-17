@@ -31,14 +31,19 @@ export default async function handler(conn, m, args, db) {
     const text = args.join(' ')
     const lines = wrapText(text, 10)
 
-    const lineHeight = 100
-    const svgWidth = 500
-    const svgHeight = lines.length * lineHeight
+    const svgWidth = 512
+    const svgHeight = 512
+    const lineHeight = Math.min(100, Math.floor(430 / Math.max(lines.length, 1)))
+    const fontSize = Math.max(30, Math.min(95, Math.floor(lineHeight * 0.82)))
+    const firstBaseline = Math.round(256 - ((lines.length - 1) * lineHeight) / 2)
 
     const svgText = lines
       .map((line, index) => {
-        const yPos = (index * lineHeight) + 85
-        return `<text x="25" y="${yPos}" class="text" textLength="450" lengthAdjust="spacingAndGlyphs">${line}</text>`
+        const yPos = firstBaseline + index * lineHeight
+        // El ancho fijo deja margen para el borde y evita que una letra toque
+        // el límite del SVG. El lienzo ya es cuadrado, por lo que no aparecen
+        // las franjas de contain de la versión anterior.
+        return `<text x="256" y="${yPos}" text-anchor="middle" class="text" textLength="440" lengthAdjust="spacingAndGlyphs">${line}</text>`
       })
       .join('')
 
@@ -47,7 +52,7 @@ export default async function handler(conn, m, args, db) {
         <style>
           .text {
             font-family: 'Arial Narrow', 'Arial', sans-serif;
-            font-size: 95px;
+            font-size: ${fontSize}px;
             font-weight: 900;
             fill: black;
           }
@@ -58,11 +63,6 @@ export default async function handler(conn, m, args, db) {
     `)
 
     const buffer = await sharp(svgBuffer)
-      .resize(512, 512, {
-        // Mantiene la proporción del texto cuando el número de líneas cambia.
-        fit: 'contain',
-        background: { r: 255, g: 255, b: 255, alpha: 1 },
-      })
       .webp({ quality: 90 })
       .toBuffer()
 

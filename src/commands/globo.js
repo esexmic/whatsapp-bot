@@ -39,6 +39,14 @@ export default async function handler(conn, m, args, db) {
       position: 'centre',
       background: { r: 255, g: 255, b: 255, alpha: 0 },
     }).png().toBuffer()
+    // El fondo cover solo sirve como relleno desenfocado. La imagen original
+    // se coloca encima con contain, así no se recorta ni quedan franjas blancas.
+    const uBg = await sharp(user)
+      .resize(SZ, userH, { fit: 'cover', position: 'centre' })
+      .blur(28)
+      .modulate({ saturation: 0.8, brightness: 1.05 })
+      .png()
+      .toBuffer()
     const uBuf = await sharp(user).resize(SZ, userH, {
       fit: 'contain',
       position: 'centre',
@@ -52,6 +60,7 @@ export default async function handler(conn, m, args, db) {
     await sharp({ create: { width: SZ, height: SZ, channels: 3, background: { r: 255, g: 255, b: 255 } } })
       .composite([
         { input: gBuf, top: 0, left: 0 },
+        { input: uBg, top: GH, left: 0 },
         { input: uBuf, top: GH, left: 0 }
       ])
       .webp({ quality: 90 })
