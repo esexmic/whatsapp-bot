@@ -32,10 +32,18 @@ export default async function handler(conn, m, args, db) {
     const globe = fs.readFileSync(globeFile)
     const userH = SZ - GH
 
-    // Globe: fill ancho, cover mantiene proporcion
-    const gBuf = await sharp(globe).resize(SZ, GH, { fit: 'cover', position: 'centre' }).png().toBuffer()
-    // User: fill el resto debajo
-    const uBuf = await sharp(user).resize(SZ, userH, { fit: 'cover', position: 'centre' }).png().toBuffer()
+    // `contain` mantiene completa tanto la plantilla como la imagen del
+    // usuario; `cover` recortaba caras y texto en imágenes no panorámicas.
+    const gBuf = await sharp(globe).resize(SZ, GH, {
+      fit: 'contain',
+      position: 'centre',
+      background: { r: 255, g: 255, b: 255, alpha: 0 },
+    }).png().toBuffer()
+    const uBuf = await sharp(user).resize(SZ, userH, {
+      fit: 'contain',
+      position: 'centre',
+      background: { r: 255, g: 255, b: 255, alpha: 0 },
+    }).png().toBuffer()
 
     const tmp = path.join(process.cwd(), 'temp')
     if (!fs.existsSync(tmp)) fs.mkdirSync(tmp, { recursive: true })

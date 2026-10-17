@@ -59,7 +59,9 @@ export default async function handler(conn, m, args, db) {
 
     const buffer = await sharp(svgBuffer)
       .resize(512, 512, {
-        fit: 'fill'
+        // Mantiene la proporción del texto cuando el número de líneas cambia.
+        fit: 'contain',
+        background: { r: 255, g: 255, b: 255, alpha: 1 },
       })
       .webp({ quality: 90 })
       .toBuffer()

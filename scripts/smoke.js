@@ -3,6 +3,7 @@ import { isOwner, isAdmin, clean, OWNER_IDS, getOwnerInfo } from '../src/lib/per
 import { isStaff, senderOf } from '../src/lib/guard.js'
 import { loadDB, saveDB, defaultDB, DB_FILE } from '../src/lib/store.js'
 import { validateUrl } from '../src/lib/ytdlp.js'
+import { selectEnriqueTargets } from '../src/commands/enrique.js'
 
 let pass = 0
 let fail = 0
@@ -51,6 +52,26 @@ console.log('\n== clean ==')
 t('clean quita @s.whatsapp.net', () => assert.equal(clean('123@s.whatsapp.net'), '123'))
 t('clean quita device', () => assert.equal(clean('123:45@s.whatsapp.net'), '123'))
 t('clean vacio', () => assert.equal(clean(''), ''))
+
+console.log('\n== enrique ==')
+t('enrique nunca expulsa al bot, owner, admin ni al remitente', () => {
+  const participants = [
+    { id: '521111111111@s.whatsapp.net' },
+    { id: '521222222222@s.whatsapp.net' },
+    { id: '521333333333@s.whatsapp.net' },
+    { id: '521444444444@s.whatsapp.net' },
+    { id: '521555555555@s.whatsapp.net' },
+  ]
+
+  const selected = selectEnriqueTargets(participants, {
+    botIds: ['521111111111'],
+    senderId: '521555555555',
+    ownerCheck: (id) => id === '521333333333',
+    adminCheck: (id) => id === '521444444444',
+  })
+
+  assert.deepEqual(selected, ['521222222222@s.whatsapp.net'])
+})
 
 console.log('\n== admin ==')
 const db = defaultDB()

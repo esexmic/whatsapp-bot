@@ -23,7 +23,9 @@ export async function makeAnimatedSticker(input, { packname = 'bot', author = 'x
         '-i', inputPath,
         '-t', String(maxDuration),
         '-vcodec', 'libwebp',
-        '-vf', 'scale=512:512:force_original_aspect_ratio=increase,crop=512:512,fps=15',
+        // `decrease` + `pad` conserva todos los píxeles y completa el
+        // lienzo transparente sin recortar los extremos del vídeo.
+        '-vf', 'scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=black@0,fps=15',
         '-loop', '0',
         '-an',
         outputPath,

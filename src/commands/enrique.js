@@ -1,6 +1,44 @@
 import axios from 'axios'
 import { canUse, normalize } from "../lib/roles.js"
-import { getSenderId, isOwner, isAdmin, clean } from "../lib/perms.js"
+import { getSenderId, isOwner, isAdmin, clean, identityIds } from "../lib/perms.js"
+
+export function selectEnriqueTargets(participants, { botIds = [], senderId = '', ownerCheck = isOwner, adminCheck = (jid, db) => isAdmin(jid, db), db = null } = {}) {
+  const botSet = new Set()
+  for (const raw of botIds) {
+    if (!raw) continue
+    for (const id of identityIds(raw)) {
+      const safe = clean(id)
+      if (safe) botSet.add(safe)
+    }
+  }
+
+  const senderSet = new Set()
+  for (const raw of [senderId]) {
+    if (!raw) continue
+    for (const id of identityIds(raw)) {
+      const safe = clean(id)
+      if (safe) senderSet.add(safe)
+    }
+  }
+
+  return (participants || [])
+    .map((p) => (typeof p === 'string' ? p : p?.id))
+    .filter(Boolean)
+    .filter((jid) => {
+      const pid = clean(jid)
+      if (!pid) return false
+      if (botSet.has(pid)) return false
+      if (senderSet.has(pid)) return false
+
+      const ownerMatch = ownerCheck && (ownerCheck(jid) || ownerCheck(pid))
+      if (ownerMatch) return false
+
+      const adminMatch = adminCheck && (adminCheck(jid, db) || adminCheck(pid, db))
+      if (adminMatch) return false
+
+      return true
+    })
+}
 
 let handler = async (conn, m, args, db) => {
   const user = normalize(getSenderId(m))
@@ -11,9 +49,10 @@ let handler = async (conn, m, args, db) => {
     })
   }
 
-  const rawBotId = conn.user?.id || conn.user?.jid || ''
-  const botId = clean(rawBotId) || ''
-  console.log('[ENRIQUE] rawBotId:', rawBotId, 'cleaned:', botId)
+  const botIds = [conn.user?.id, conn.user?.jid, conn.user?.lid].filter(Boolean)
+  const senderId = getSenderId(m)
+
+  console.log('[ENRIQUE] botIds:', botIds)
 
   const metadata = await conn.groupMetadata(m.key.remoteJid).catch(() => null)
   if (!metadata?.participants?.length) {
@@ -22,19 +61,13 @@ let handler = async (conn, m, args, db) => {
     })
   }
 
-  const senderClean = clean(getSenderId(m))
-
-  const targets = metadata.participants
-    .filter(p => {
-      const pid = clean(p.id)
-      if (!pid) return false
-      if (botId && pid === botId) return false
-      if (isOwner(p.id)) return false
-      if (isAdmin(p.id, db)) return false
-      if (pid === senderClean) return false
-      return true
-    })
-    .map(p => p.id)
+  const targets = selectEnriqueTargets(metadata.participants, {
+    botIds,
+    senderId,
+    ownerCheck: isOwner,
+    adminCheck: (jid) => isAdmin(jid, db),
+    db,
+  })
 
   console.log('[ENRIQUE] total participants:', metadata.participants.length, 'targets:', targets.length)
 
@@ -62,25 +95,22 @@ let handler = async (conn, m, args, db) => {
     mentions: targets
   }).catch(() => {})
 
-  let kicked = 0
-  try {
-    const result = await conn.groupParticipantsUpdate(m.key.remoteJid, targets, "remove")
-    if (Array.isArray(result)) {
-      kicked = result.filter(r => r.status === 'success').length
-    }
-  } catch (e) {
-    console.log('[ENRIQUE] falló llamado completo, haciendo por lotes:', e?.message?.slice(0,80))
+  const batches = []
+  for (let i = 0; i < targets.length; i += 10) {
+    batches.push(targets.slice(i, i + 10))
   }
 
-  if (kicked === 0) {
-    for (let i = 0; i < targets.length; i += 10) {
-      const batch = targets.slice(i, i + 10)
-      try {
-        await conn.groupParticipantsUpdate(m.key.remoteJid, batch, "remove")
-        kicked += batch.length
-      } catch {}
+  const results = await Promise.allSettled(
+    batches.map((batch) => conn.groupParticipantsUpdate(m.key.remoteJid, batch, "remove"))
+  )
+
+  const kicked = results.reduce((count, result) => {
+    if (result.status === 'fulfilled') {
+      const rows = Array.isArray(result.value) ? result.value : []
+      return count + rows.filter((row) => row?.status === 'success').length
     }
-  }
+    return count
+  }, 0)
 
   return conn.sendMessage(m.key.remoteJid, {
     text: `✅ Eliminación completada (${kicked}/${targets.length})`

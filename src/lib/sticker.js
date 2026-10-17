@@ -67,7 +67,9 @@ export async function makeSticker(input, { packname = 'bot', author = 'xyb', qua
     // todas las páginas, así que el movimiento sobrevive al reescalado.
     const resized = await sharp(buffer, { failOn: 'none', animated: true })
       .resize(MAX, MAX, {
-        fit: 'cover',
+        // Nunca recortar el contenido: `contain` conserva completa la
+        // imagen original dentro del lienzo 512x512.
+        fit: 'contain',
         position: 'centre',
         background: { r: 0, g: 0, b: 0, alpha: 0 },
       })
@@ -83,7 +85,8 @@ export async function makeSticker(input, { packname = 'bot', author = 'xyb', qua
   const image = sharp(buffer, { failOn: 'none', animated: false })
     .rotate() // respeta EXIF de orientación
     .resize(MAX, MAX, {
-      fit: 'cover',
+      // `cover` cortaba los bordes de imágenes panorámicas o verticales.
+      fit: 'contain',
       position: 'centre',
       background: { r: 0, g: 0, b: 0, alpha: 0 },
     })
@@ -103,7 +106,11 @@ export async function makeStickerWithText(input, text, opts = {}) {
   // sharp -> raw RGBA -> canvas
   const { data, info } = await sharp(buffer, { failOn: 'none' })
     .rotate()
-    .resize(MAX, MAX, { fit: 'cover', position: 'centre' })
+    .resize(MAX, MAX, {
+      fit: 'contain',
+      position: 'centre',
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    })
     .ensureAlpha()
     .raw()
     .toBuffer({ resolveWithObject: true })
